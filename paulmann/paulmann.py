@@ -98,8 +98,13 @@ class Paulmann:
         self.set_state(on=not state.on)
         
     def color (self, value: int):
-        """ color between 153 and 370 - in milireds """
+        """ color range from 153 and 370 - in milireds or from 2700 to 6500 in kelvin"""
         self.set_state(color=value)
+
+    def color_raw (self, value: int):
+        """ writing an integer value out of the defined range """
+        logging.info("Color to " + str(color))
+        device.char_write(UUID_COLOR, value.to_bytes(2, "little"))
 
     def brightness (self, value: int):
         """ brightness between 0 and 100 """
@@ -129,7 +134,11 @@ class Paulmann:
         brightness : int
             brigtness in range of 0 to 100, where 0 is least bright
         color : int
-            color in milireds in the range of 154 to 370, 370 being most "warm" or yellow light
+            depending on the hardware, one of two color models is applicable
+            a) color in milireds in the range of 153 to 370, 370 being most "warm" or yellow light
+            b) color temperature in kelvin in the range of 2700 to 6500 kelvin, 2700 being the most "warm" or yellow light
+            FIXME: it might make sense to add a color_raw method, so if Paulmann GmbH might add a lamp traversing these interger limits, one could still write the values.
+            FIXME: as each value is written individually, it might be more accurate an leaner in terms of execution time to have these write operations in the individual functions instead of in set_state.
         """
         device = self.get_device()
 
@@ -150,7 +159,11 @@ class Paulmann:
             device.char_write(UUID_BRIGHTNESS, brightness.to_bytes(1, "little"))
 
         if color is not None:
-            if color > 370:
+            if color > 6500:
+                color = 6500
+            elif color < 2700 and color >= 1000:
+                color = 2700
+            elif color > 370:
                 color = 370
             elif color < 153:
                 color = 153
