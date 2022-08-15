@@ -63,7 +63,7 @@ class Paulmann:
 
     def _authenticate (self, device: BLEDevice, pwd: str):
         """ authenticate with the device, does not alter state of self """
-        
+
         logging.info("Sending password " + pwd)
         try:
             device.char_write (UUID_PWD, bytearray(pwd, "ascii"))
@@ -96,14 +96,27 @@ class Paulmann:
         """ flip the switch regardless of current state """
         state:State = self.get_state()
         self.set_state(on=not state.on)
-        
+
     def color (self, value: int):
-        """ color between 153 and 370 - in milireds """
+        """ color range from 153 to 370 (warmest) in milireds or from 2700 (warmest) to 6500 in kelvin"""
         self.set_state(color=value)
+
+    def color_raw (self, value: int):
+        device = self.get_device()
+        """ writing an integer value out of the defined range """
+        """ if Paulmann GmbH might add a lamp traversing these current interger limits, one could still write the values with color_raw"""
+        logging.info("Color to " + str(value))
+        device.char_write(UUID_COLOR, value.to_bytes(2, "little"))
 
     def brightness (self, value: int):
         """ brightness between 0 and 100 """
         self.set_state(brightness=value)
+
+    def brightness_raw (self, value: int):
+        device = self.get_device()
+        """ writing an integer value out of the defined range """
+        logging.info("Brightness to " + str(value))
+        device.char_write(UUID_BRIGHTNESS, value.to_bytes(1, "little"))
 
     def is_on(self)->bool:
         """ return current state of light = on or off """
@@ -129,7 +142,13 @@ class Paulmann:
         brightness : int
             brigtness in range of 0 to 100, where 0 is least bright
         color : int
-            color in milireds in the range of 154 to 370, 370 being most "warm" or yellow light
+            depending on the hardware, one of two color models is applicable
+            a) color in milireds in the range of 153 to 370, 370 being most "warm" or yellow light
+            b) color temperature in kelvin in the range of 2700 to 6500 kelvin, 2700 being the most "warm" or yellow light
+
+            FIXME: it seems the connection is re-setup on every set_state() execution, 
+            which reduces the amount of possible write operations per second as you would want for fading.
+            If possible, the connection should only be established once or once every timeout interval to facilitate higher throughput.
         """
         device = self.get_device()
 
@@ -140,7 +159,7 @@ class Paulmann:
             else:
                 logging.info("Toggle off")
                 device.char_write (UUID_ONOFF, bytearray([0x00]))
-                
+
         if brightness is not None:
             if brightness > 100:
                 brightness = 100
@@ -150,10 +169,16 @@ class Paulmann:
             device.char_write(UUID_BRIGHTNESS, brightness.to_bytes(1, "little"))
 
         if color is not None:
-            if color > 370:
-                color = 370
-            elif color < 153:
-                color = 153
+            if color > 500:
+                if color > 6500:
+                    color = 6500
+                elif color < 2700:
+                    color = 2700
+            else:
+                if color > 370:
+                    color = 370
+                elif color < 153:
+                    color = 153
 
             logging.info("Color to " + str(color))
             device.char_write(UUID_COLOR, color.to_bytes(2, "little"))
